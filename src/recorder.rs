@@ -22,6 +22,10 @@ impl Recorder {
         }
     }
 
+    pub fn is_recording(&self) -> bool {
+        self.session.is_some()
+    }
+
     /// The session opens on the first event rather than on connect, so powering the piano on
     /// without playing leaves no file behind.
     pub fn record(&mut self, device: &str, event: &crate::raw_log::Event) -> std::io::Result<()> {
@@ -217,6 +221,19 @@ mod tests {
 
         assert_ne!(first, second);
         assert_eq!(files_with_extension(&dir, "mid"), 2);
+    }
+
+    #[test]
+    fn is_recording_only_while_a_session_is_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recorder = recorder(&dir);
+        assert!(!recorder.is_recording());
+
+        recorder.record("FP-90X", &event(1_000)).unwrap();
+        assert!(recorder.is_recording());
+
+        recorder.close().unwrap();
+        assert!(!recorder.is_recording());
     }
 
     #[test]
