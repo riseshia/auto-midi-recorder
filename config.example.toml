@@ -1,0 +1,8 @@
+# Case-insensitive substring of the MIDI input port name.
+device_name = "Roland Digital Piano"
+
+# Where session files are written. Created if missing.
+output_dir = 'C:\Users\me\Music\midi-sessions'
+
+# Close the session after this much silence. The next event starts a new file.
+idle_timeout_minutes = 30
