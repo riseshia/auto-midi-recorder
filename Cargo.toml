@@ -1,0 +1,20 @@
+[package]
+name = "auto-midi-recorder"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Background logger that records every MIDI event from a digital piano into per-session files"
+license = "MIT"
+repository = "https://github.com/riseshia/auto-midi-recorder"
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+midly = "0.5"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+[target.'cfg(windows)'.dependencies]
+midir = "0.11"
+
+[dev-dependencies]
+tempfile = "3"
