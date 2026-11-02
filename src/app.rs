@@ -51,7 +51,23 @@ fn run(config_path: &std::path::Path) -> Result<(), String> {
 
     auto_midi_recorder::diag::log("started");
     recover_leftovers(&config.output_dir)?;
-    record_forever(&config)
+
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (status_sender, statuses) = std::sync::mpsc::channel();
+    let output_dir = config.output_dir.clone();
+    // The tray has to stay on the thread that created it, so recording is what moves off main.
+    let recording = std::thread::spawn({
+        let stop = stop.clone();
+        move || record_until_stopped(&config, &stop, &status_sender)
+    });
+
+    crate::tray::run(&statuses, &output_dir);
+
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    // Waiting lets an open session finish into a .mid instead of needing recovery at next start.
+    let _ = recording.join();
+    auto_midi_recorder::diag::log("stopped");
+    Ok(())
 }
 
 fn recover_leftovers(output_dir: &std::path::Path) -> Result<(), String> {
@@ -71,7 +87,11 @@ fn recover_leftovers(output_dir: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-fn record_forever(config: &auto_midi_recorder::config::Config) -> ! {
+fn record_until_stopped(
+    config: &auto_midi_recorder::config::Config,
+    stop: &std::sync::atomic::AtomicBool,
+    statuses: &std::sync::mpsc::Sender<crate::tray::Status>,
+) {
     let (sender, receiver) = std::sync::mpsc::channel::<auto_midi_recorder::raw_log::Event>();
     let mut recorder = auto_midi_recorder::recorder::Recorder::new(
         config.output_dir.clone(),
@@ -83,7 +103,9 @@ fn record_forever(config: &auto_midi_recorder::config::Config) -> ! {
     let mut last_sync = std::time::Instant::now();
     let mut last_poll: Option<std::time::Instant> = None;
 
-    loop {
+    let mut last_status = crate::tray::Status::Waiting;
+
+    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
         let received = receiver.recv_timeout(TICK).ok();
         let now = now_micros();
 
@@ -137,6 +159,27 @@ fn record_forever(config: &auto_midi_recorder::config::Config) -> ! {
                 }
             }
         }
+
+        let status = current_status(connection.as_ref(), &recorder);
+        if status != last_status {
+            let _ = statuses.send(status.clone());
+            last_status = status;
+        }
+    }
+
+    disconnect(&mut connection, &mut recorder, &receiver);
+}
+
+fn current_status(
+    connection: Option<&Connection>,
+    recorder: &auto_midi_recorder::recorder::Recorder,
+) -> crate::tray::Status {
+    match connection {
+        None => crate::tray::Status::Waiting,
+        Some(connection) if recorder.is_recording() => {
+            crate::tray::Status::Recording(connection.port_name.clone())
+        }
+        Some(connection) => crate::tray::Status::Connected(connection.port_name.clone()),
     }
 }
 

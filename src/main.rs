@@ -2,6 +2,10 @@
 
 #[cfg(windows)]
 mod app;
+#[cfg(windows)]
+mod autostart;
+#[cfg(windows)]
+mod tray;
 
 #[cfg(windows)]
 fn main() -> std::process::ExitCode {

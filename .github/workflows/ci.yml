@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   check:
-    # Windows because src/app.rs and midir's WinMM backend only compile there.
+    # Windows because the MIDI input and tray code only compile there.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
